@@ -1,17 +1,25 @@
 package com.jz.audio;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
+import android.media.MediaCodec;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
+import android.media.MediaMuxer;
 import android.media.MediaRecorder;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
@@ -20,6 +28,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 
 import java.io.ByteArrayOutputStream;
@@ -29,6 +38,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -63,6 +73,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private byte[] audioData;
     private FileInputStream fileInputStream;
 
+    private int finish = 1;
+    private int error = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,51 +90,45 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         checkPermissions();
     }
 
+    @SuppressLint("HandlerLeak")
+    private Handler handler = new Handler(){
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what){
+                case 1:
+                    Toast.makeText(MainActivity.this, "完成", Toast.LENGTH_SHORT).show();
+                    return;
+
+                case -1:
+                    Toast.makeText(MainActivity.this, "失败", Toast.LENGTH_SHORT).show();
+                    return;
+            }
+        }
+    };
+
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.btn_control:
-                Button button = (Button) view;
-                if (button.getText().toString().equals(getString(R.string.start_record))) {
-                    button.setText(getString(R.string.stop_record));
-                    startRecord();
-                } else {
-                    button.setText(getString(R.string.start_record));
-                    stopRecord();
-                }
-
-                break;
-            case R.id.btn_convert:
-                PcmToWavUtil pcmToWavUtil = new PcmToWavUtil(SAMPLE_RATE_INHZ, CHANNEL_CONFIG, AUDIO_FORMAT);
-                File pcmFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.pcm");
-                File wavFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.wav");
-                if (!wavFile.mkdirs()) {
-                    Log.e(TAG, "wavFile Directory not created");
-                }
-                if (wavFile.exists()) {
-                    wavFile.delete();
-                }
-                pcmToWavUtil.pcmToWav(pcmFile.getAbsolutePath(), wavFile.getAbsolutePath());
-
-                break;
-            case R.id.btn_play:
-                Button btn = (Button) view;
-                String string = btn.getText().toString();
-                if (string.equals(getString(R.string.start_play))) {
-                    btn.setText(getString(R.string.stop_play));
-                    playInModeStream();
-                    //playInModeStatic();
-                } else {
-                    btn.setText(getString(R.string.start_play));
-                    stopPlay();
-                }
+                start("test.mp4", "test1.mp4");
                 break;
 
             default:
                 break;
         }
+    }
+
+    private void start(final String src, final String target){
+        new Thread(){
+            @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
+            @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
+            @Override
+            public void run() {
+                copyMp4(src, target);
+            }
+        }.start();
     }
 
 
@@ -139,70 +145,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
 
-    public void startRecord() {
-        final int minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE_INHZ, CHANNEL_CONFIG, AUDIO_FORMAT);
-        audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE_INHZ,
-                CHANNEL_CONFIG, AUDIO_FORMAT, minBufferSize);
 
-        final byte data[] = new byte[minBufferSize];
-        final File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.pcm");
-        if (!file.mkdirs()) {
-            Log.e(TAG, "Directory not created");
-        }
-        if (file.exists()) {
-            file.delete();
-        }
-
-        audioRecord.startRecording();
-        isRecording = true;
-
-        // TODO: 2018/3/10 pcm数据无法直接播放，保存为WAV格式。
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-
-                FileOutputStream os = null;
-                try {
-                    os = new FileOutputStream(file);
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                }
-
-                if (null != os) {
-                    while (isRecording) {
-                        int read = audioRecord.read(data, 0, minBufferSize);
-                        // 如果读取音频数据没有出现错误，就将数据写入到文件
-                        if (AudioRecord.ERROR_INVALID_OPERATION != read) {
-                            try {
-                                os.write(data);
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    }
-                    try {
-                        Log.i(TAG, "run: close file output stream !");
-                        os.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        }).start();
-    }
-
-
-    public void stopRecord() {
-        isRecording = false;
-        // 释放资源
-        if (null != audioRecord) {
-            audioRecord.stop();
-            audioRecord.release();
-            audioRecord = null;
-            //recordingThread = null;
-        }
-    }
 
 
     private void checkPermissions() {
@@ -222,131 +165,75 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
 
-    /**
-     * 播放，使用stream模式
-     */
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private void playInModeStream() {
-        /*
-        * SAMPLE_RATE_INHZ 对应pcm音频的采样率
-        * channelConfig 对应pcm音频的声道
-        * AUDIO_FORMAT 对应pcm音频的格式
-        * */
-        int channelConfig = AudioFormat.CHANNEL_OUT_MONO;
-        final int minBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE_INHZ, channelConfig, AUDIO_FORMAT);
-        audioTrack = new AudioTrack(
-                new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build(),
-                new AudioFormat.Builder().setSampleRate(SAMPLE_RATE_INHZ)
-                        .setEncoding(AUDIO_FORMAT)
-                        .setChannelMask(channelConfig)
-                        .build(),
-                minBufferSize,
-                AudioTrack.MODE_STREAM,
-                AudioManager.AUDIO_SESSION_ID_GENERATE);
-        audioTrack.play();
 
-        File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.pcm");
-        Log.i("j_tag", file.getAbsolutePath());
+    @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
+    private void copyMp4(String srcFIle, String targetFile){
+        MediaExtractor extractor = null;
+        MediaMuxer muxer = null;
         try {
-            fileInputStream = new FileInputStream(file);
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        byte[] tempBuffer = new byte[minBufferSize];
-                        while (fileInputStream.available() > 0) {
-                            int readCount = fileInputStream.read(tempBuffer);
-                            if (readCount == AudioTrack.ERROR_INVALID_OPERATION ||
-                                    readCount == AudioTrack.ERROR_BAD_VALUE) {
-                                continue;
-                            }
-                            if (readCount != 0 && readCount != -1) {
-                                audioTrack.write(tempBuffer, 0, readCount);
-                            }
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+
+            String basePath = Environment.getDataDirectory().getAbsolutePath();
+            //分离器 可以将一个视频分离为音频和视频
+            extractor = new MediaExtractor();
+            extractor.setDataSource(basePath+"/"+srcFIle);
+
+            int videoTrackIndex = -1;  //通道
+            int frameRate = 0;  //帧率
+            //得到源文件通道数
+            for(int i = 0; i < extractor.getTrackCount(); i++){
+                MediaFormat format = extractor.getTrackFormat(i);       //获取该通道的格式，视频、音频等
+                String type = format.getString(MediaFormat.KEY_MIME);
+                if(!type.startsWith("video/")){          //必须是视频流
+                    continue;
                 }
-            }).start();
+                System.out.print("channel " + i + " " + type);
+                frameRate = format.getInteger(MediaFormat.KEY_FRAME_RATE);      //获取帧率
+                extractor.selectTrack(i);                                       //指定通道
+                muxer = new MediaMuxer(basePath + "/" + targetFile, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+                videoTrackIndex = muxer.addTrack(format);
+                muxer.start();
+            }
+            //没有视频
+            if(muxer == null){
+                System.out.print("muxer null");
+                return;
+            }
+
+            //写入文件
+            MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
+            info.presentationTimeUs = 0;
+            ByteBuffer buffer = ByteBuffer.allocate(500 * 1024);        //缓存区500k
+            int sampleSize = 0;
+            //readSampleData
+            while ((sampleSize = extractor.readSampleData(buffer, 0)) >0){
+                info.offset = 0;
+                info.size = sampleSize;
+                info.flags = MediaCodec.BUFFER_FLAG_SYNC_FRAME;     //这数据包含关键帧  乱猜的
+                info.presentationTimeUs += 1000 * 1000 / frameRate;     //时间戳
+                //将数据写入到指定通道去
+                muxer.writeSampleData(videoTrackIndex, buffer, info);
+                //读取下一帧
+                extractor.advance();        //
+            }
+
+            handler.sendEmptyMessage(finish);
 
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-
-    /**
-     * 播放，使用static模式
-     */
-    private void playInModeStatic() {
-        // static模式，需要将音频数据一次性write到AudioTrack的内部缓冲区
-
-        new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... params) {
-                try {
-                    InputStream in = getResources().openRawResource(R.raw.ding);
-                    try {
-                        ByteArrayOutputStream out = new ByteArrayOutputStream();
-                        for (int b; (b = in.read()) != -1; ) {
-                            out.write(b);
-                        }
-                        Log.d(TAG, "Got the data");
-                        audioData = out.toByteArray();
-                    } finally {
-                        in.close();
-                    }
-                } catch (IOException e) {
-                    Log.wtf(TAG, "Failed to read", e);
-                }
-                return null;
+            handler.sendEmptyMessage(error);
+        } finally {
+            if(extractor != null){
+                extractor.release();
             }
 
-
-            @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-            @Override
-            protected void onPostExecute(Void v) {
-                Log.i(TAG, "Creating track...audioData.length = " + audioData.length);
-
-                // R.raw.ding铃声文件的相关属性为 22050Hz, 8-bit, Mono
-                audioTrack = new AudioTrack(
-                        new AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                                .build(),
-                        new AudioFormat.Builder().setSampleRate(22050)
-                                .setEncoding(AudioFormat.ENCODING_PCM_8BIT)
-                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                                .build(),
-                        audioData.length,
-                        AudioTrack.MODE_STATIC,
-                        AudioManager.AUDIO_SESSION_ID_GENERATE);
-                Log.d(TAG, "Writing audio data...");
-                audioTrack.write(audioData, 0, audioData.length);
-                Log.d(TAG, "Starting playback");
-                audioTrack.play();
-                Log.d(TAG, "Playing");
+            if(muxer != null){
+                muxer.stop();
+                muxer.release();
             }
-
-        }.execute();
-
-    }
-
-
-    /**
-     * 停止播放
-     */
-    private void stopPlay() {
-        if (audioTrack != null) {
-            Log.d(TAG, "Stopping");
-            audioTrack.stop();
-            Log.d(TAG, "Releasing");
-            audioTrack.release();
-            Log.d(TAG, "Nulling");
         }
+
     }
+
+
 }
