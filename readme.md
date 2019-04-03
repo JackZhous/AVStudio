@@ -16,3 +16,6 @@ AudioRecord是Android提供的录音功能的一个类，经过它录音的数�
 ## 框架图
 
 ![audiorecord](audiorecord.png)
+
+
+在接触Android音频播放API的时候，发现SoundPool也可以用于播放音频。下面是三者的使用场景：MediaPlayer 更加适合在后台长时间播放本地音乐文件或者在线的流式资源; SoundPool 则适合播放比较短的音频片段，比如游戏声音、按键声、铃声片段等等，它可以同时播放多个音频; 而 AudioTrack 则更接近底层，提供了非常强大的控制能力，支持低延迟播放，适合流媒体和VoIP语音电话等场景。
