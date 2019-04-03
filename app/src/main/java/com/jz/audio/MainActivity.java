@@ -173,7 +173,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         MediaMuxer muxer = null;
         try {
 
-            String basePath = Environment.getDataDirectory().getAbsolutePath();
+            String basePath = Environment.getExternalStorageDirectory().getAbsolutePath();
             //分离器 可以将一个视频分离为音频和视频
             extractor = new MediaExtractor();
             extractor.setDataSource(basePath+"/"+srcFIle);
