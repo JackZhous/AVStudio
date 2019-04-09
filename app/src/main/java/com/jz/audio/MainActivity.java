@@ -114,7 +114,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.btn_control:
                 start("test.mp4", "test1.mp4");
                 break;
-
+            case R.id.btn_convert:
+                startHasNoise("test.mp4", "test1.mp4");
+                break;
             default:
                 break;
         }
@@ -127,6 +129,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             @Override
             public void run() {
                 copyMp4(src, target);
+            }
+        }.start();
+    }
+
+    private void startHasNoise(final String src, final String target){
+        new Thread(){
+            @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
+            @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
+            @Override
+            public void run() {
+                copyMp4HasNoise(src, target);
             }
         }.start();
     }
@@ -165,6 +178,86 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
 
+    //有声视频
+    @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
+    private void copyMp4HasNoise(String srcFIle, String targetFile){
+        MediaExtractor extractor = null;
+        MediaMuxer muxer = null;
+        try {
+
+            String basePath = Environment.getExternalStorageDirectory().getAbsolutePath();
+            //分离器 可以将一个视频分离为音频和视频
+            extractor = new MediaExtractor();
+            extractor.setDataSource(basePath+"/"+srcFIle);
+
+            int videoTrackIndex = -1;  //通道
+            int frameRate = 0;  //帧率
+            //得到源文件通道数
+            for(int i = 0; i < extractor.getTrackCount(); i++){
+                MediaFormat format = extractor.getTrackFormat(i);       //获取该通道的格式，视频、音频等
+                String type = format.getString(MediaFormat.KEY_MIME);
+                Log.i("j_tag", "channel " + i + "type  " + type);
+//                if(!type.startsWith("video/")){          //必须是视频流
+//                    continue;
+//                }
+                System.out.print("channel " + i + " " + type);
+                frameRate = format.getInteger(MediaFormat.KEY_FRAME_RATE);      //获取帧率 音频
+                Log.i("j_tag", "channel " + i + " rate " + frameRate);
+
+                extractor.selectTrack(i);                                       //指定通道
+                if(muxer == null){
+                    muxer = new MediaMuxer(basePath + "/" + targetFile, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+                }
+                videoTrackIndex = muxer.addTrack(format);
+                muxer.start();
+
+                //没有视频
+//                if(muxer == null){
+//                    System.out.print("muxer null");
+//                    continue;
+//                }
+
+                //写入文件
+                MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
+                info.presentationTimeUs = 0;
+                ByteBuffer buffer = ByteBuffer.allocate(500 * 1024);        //缓存区500k
+                int sampleSize = 0;
+                //readSampleData
+                while ((sampleSize = extractor.readSampleData(buffer, 0)) >0){
+                    info.offset = 0;
+                    info.size = sampleSize;
+                    info.flags = MediaCodec.BUFFER_FLAG_SYNC_FRAME;     //这数据包含关键帧  乱猜的
+                    info.presentationTimeUs += 1000 * 1000 / frameRate;     //时间戳
+                    //将数据写入到指定通道去
+                    muxer.writeSampleData(videoTrackIndex, buffer, info);
+                    //读取下一帧
+                    extractor.advance();        //
+                }
+
+                handler.sendEmptyMessage(finish);
+
+            }
+
+
+
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            handler.sendEmptyMessage(error);
+        } finally {
+            if(extractor != null){
+                extractor.release();
+            }
+
+            if(muxer != null){
+                muxer.stop();
+                muxer.release();
+            }
+        }
+
+    }
+
 
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
@@ -184,11 +277,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             for(int i = 0; i < extractor.getTrackCount(); i++){
                 MediaFormat format = extractor.getTrackFormat(i);       //获取该通道的格式，视频、音频等
                 String type = format.getString(MediaFormat.KEY_MIME);
+                Log.i("j_tag", "channel " + i + "type  " + type);
                 if(!type.startsWith("video/")){          //必须是视频流
                     continue;
                 }
                 System.out.print("channel " + i + " " + type);
                 frameRate = format.getInteger(MediaFormat.KEY_FRAME_RATE);      //获取帧率
+                Log.i("j_tag", "channel " + i + " rate " + frameRate);
+
                 extractor.selectTrack(i);                                       //指定通道
                 muxer = new MediaMuxer(basePath + "/" + targetFile, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
                 videoTrackIndex = muxer.addTrack(format);
