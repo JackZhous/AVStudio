@@ -42,9 +42,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.jz.audio.GlobalConfig.AUDIO_FORMAT;
-import static com.jz.audio.GlobalConfig.CHANNEL_CONFIG;
-import static com.jz.audio.GlobalConfig.SAMPLE_RATE_INHZ;
 
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -60,34 +57,35 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      */
     private String[] permissions = new String[]{
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.CAMERA
     };
     /**
      * 被用户拒绝的权限列表
      */
     private List<String> mPermissionList = new ArrayList<>();
-    private boolean isRecording;
-    private AudioRecord audioRecord;
-    private Button mBtnConvert;
-    private AudioTrack audioTrack;
-    private byte[] audioData;
-    private FileInputStream fileInputStream;
 
     private int finish = 1;
     private int error = -1;
+
+    private boolean startFlag = false;
+
+    private MuxerThread muxer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mBtnControl = (Button) findViewById(R.id.btn_control);
+        mBtnControl =  findViewById(R.id.btn_control);
         mBtnControl.setOnClickListener(this);
-        mBtnConvert = (Button) findViewById(R.id.btn_convert);
-        mBtnConvert.setOnClickListener(this);
-        mBtnPlay = (Button) findViewById(R.id.btn_play);
-        mBtnPlay.setOnClickListener(this);
-
         checkPermissions();
+
+        init();
+    }
+
+
+    private void init(){
+        muxer = new MuxerThread();
     }
 
     @SuppressLint("HandlerLeak")
@@ -112,36 +110,34 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.btn_control:
-                start("test.mp4", "test1.mp4");
+                if(!startFlag){
+                    start();
+                    mBtnControl.setText("停止");
+                }else {
+                    stop();
+                    mBtnControl.setText("开始");
+                }
+                startFlag = !startFlag;
                 break;
-            case R.id.btn_convert:
-                startHasNoise("test.mp4", "test1.mp4");
-                break;
+
             default:
                 break;
         }
     }
 
-    private void start(final String src, final String target){
-        new Thread(){
-            @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
-            @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
-            @Override
-            public void run() {
-                copyMp4(src, target);
-            }
-        }.start();
+
+    /**
+     * 开始录制
+     */
+    private void start(){
+
     }
 
-    private void startHasNoise(final String src, final String target){
-        new Thread(){
-            @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
-            @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
-            @Override
-            public void run() {
-                copyMp4HasNoise(src, target);
-            }
-        }.start();
+    /**
+     * 停止录制
+     */
+    private void stop(){
+
     }
 
 

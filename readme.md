@@ -1,6 +1,6 @@
-# AudioRecord音频开发
+# Audio Video Record 音视频录制 
 
-AudioRecord是Android提供的录音功能的一个类，经过它录音的数据时原始音频数据pcm，除此之外有一个MediaRecord，它录音的数据是压缩、编码后的数据，前者适合底层直接对底层数据操作的场景，经过AudioRecord录音的数据文件，其他播放器无法进行播放，需要用为文件添加header头才可以
+利用Android自带的MediaCodec、MediaMuxer、AudioRecorder实现视频录制并保存为mp4文件
 
 ## AudioRecord使用步骤
 
