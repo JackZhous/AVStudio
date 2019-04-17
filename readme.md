@@ -16,3 +16,6 @@
 ## 框架图
 
 ![audiorecord](audiorecord.png)
+
+项目还未完成，等待
+
